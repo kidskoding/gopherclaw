@@ -11,6 +11,7 @@ import (
 	"gopherclaw/agent"
 	"gopherclaw/mcp"
 	"gopherclaw/models"
+	"gopherclaw/rag"
 	"gopherclaw/tools"
 
 	"github.com/lpernett/godotenv"
@@ -43,7 +44,27 @@ func main() {
 		}
 	}
 
-	numWorkers := 3
+	if os.Getenv("PINECONE_API_KEY") != "" && os.Getenv("PINECONE_HOST") != "" {
+		r, err := rag.New()
+		if err != nil {
+			log.Printf("RAG init warning: %v", err)
+		} else {
+			tools.SetRAG(r)
+			log.Println("RAG: connected to Pinecone")
+
+			if ingestPath := os.Getenv("INGEST_PATH"); ingestPath != "" {
+				docs, err := rag.LoadTextFile(ingestPath)
+				if err != nil {
+					log.Fatalf("RAG ingest error: %v", err)
+				}
+				if err := r.Ingest(context.Background(), docs); err != nil {
+					log.Fatalf("RAG ingest error: %v", err)
+				}
+			}
+		}
+	}
+
+	numWorkers := 1
 	var wg sync.WaitGroup
 	for i := 1; i <= numWorkers; i++ {
 		wg.Add(1)
@@ -52,13 +73,13 @@ func main() {
 
 	go func() {
 		prompts := []string{
-			"What time is it right now?",
-			"Read the go.mod file and summarize the dependencies.",
-			"List what's in the /tmp directory.",
+			"Who created GopherClaw and what tools does it support? Search the knowledge base first, then verify by reading the source code.",
 		}
+		
 		for i, p := range prompts {
 			tasks <- models.Task{ID: i, Prompt: p}
 		}
+		
 		close(tasks)
 	}()
 
@@ -74,9 +95,9 @@ func main() {
 		select {
 		case res, ok := <-results:
 			if !ok {
+				fmt.Println("\nAll tasks complete.")
 				return
 			}
-			
 			if res.Error != nil {
 				fmt.Printf("\n[Worker %d | Task %d] ERROR: %v\n", res.WorkerID, res.TaskID, res.Error)
 			} else {

@@ -10,14 +10,20 @@ import (
 	"time"
 
 	"gopherclaw/mcp"
+	"gopherclaw/rag"
 
 	"github.com/tmc/langchaingo/llms"
 )
 
 var mcpManager *mcp.Manager
+var ragModule *rag.RAG
 
 func SetMCPManager(m *mcp.Manager) {
 	mcpManager = m
+}
+
+func SetRAG(r *rag.RAG) {
+	ragModule = r
 }
 
 func Definitions() []llms.Tool {
@@ -67,6 +73,23 @@ func Definitions() []llms.Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: &llms.FunctionDefinition{
+				Name:        "search_knowledge",
+				Description: "Search the knowledge base for relevant information. Use this when you need facts, documentation, or context about the project.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"query": map[string]any{
+							"type":        "string",
+							"description": "The search query to find relevant knowledge",
+						},
+					},
+					"required": []string{"query"},
+				},
+			},
+		},
 	}
 
 	if mcpManager != nil {
@@ -93,6 +116,8 @@ func Execute(name string, argsJSON string) string {
 		return readFile(args["path"])
 	case "get_time":
 		return getTime()
+	case "search_knowledge":
+		return searchKnowledge(args["query"])
 	default:
 		return fmt.Sprintf("unknown tool: %s", name)
 	}
@@ -137,4 +162,15 @@ func readFile(path string) string {
 
 func getTime() string {
 	return time.Now().Format("2006-01-02 15:04:05 MST")
+}
+
+func searchKnowledge(query string) string {
+	if ragModule == nil {
+		return "error: knowledge base not configured"
+	}
+	result := ragModule.Retrieve(context.Background(), query, 3)
+	if result == "" {
+		return "No relevant results found."
+	}
+	return result
 }
