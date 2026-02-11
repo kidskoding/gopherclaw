@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -8,7 +9,9 @@ import (
 	"sync"
 
 	"gopherclaw/agent"
+	"gopherclaw/mcp"
 	"gopherclaw/models"
+	"gopherclaw/tools"
 
 	"github.com/lpernett/godotenv"
 	"github.com/tmc/langchaingo/llms/anthropic"
@@ -30,6 +33,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if cfg, err := mcp.LoadConfig("mcp_servers.json"); err == nil && len(cfg.Servers) > 0 {
+		mcpMgr, err := mcp.NewManager(context.Background(), cfg.Servers)
+		if err != nil {
+			log.Printf("MCP init warning: %v", err)
+		} else {
+			tools.SetMCPManager(mcpMgr)
+			defer mcpMgr.Close()
+		}
+	}
+
 	numWorkers := 3
 	var wg sync.WaitGroup
 	for i := 1; i <= numWorkers; i++ {
@@ -39,9 +52,9 @@ func main() {
 
 	go func() {
 		prompts := []string{
-			"Be concise. Explain Go channels in 3 sentences.",
-			"Be concise. What is fan-out/fan-in concurrency?",
-			"Be concise. Why use goroutines over Python threads?",
+			"What time is it right now?",
+			"Read the go.mod file and summarize the dependencies.",
+			"List what's in the /tmp directory.",
 		}
 		for i, p := range prompts {
 			tasks <- models.Task{ID: i, Prompt: p}
@@ -61,19 +74,17 @@ func main() {
 		select {
 		case res, ok := <-results:
 			if !ok {
-				fmt.Println("\nAll tasks complete.")
 				return
 			}
+			
 			if res.Error != nil {
 				fmt.Printf("\n[Worker %d | Task %d] ERROR: %v\n", res.WorkerID, res.TaskID, res.Error)
 			} else {
 				fmt.Printf("\n[Worker %d | Task %d]\n%s\n", res.WorkerID, res.TaskID, res.Content)
 			}
 		case <-sig:
-			fmt.Println("\nShutting down agents...")
 			close(quit)
 			wg.Wait()
-			fmt.Println("GopherClaw stopped.")
 			return
 		}
 	}
