@@ -34,6 +34,7 @@ func main() {
 				context.Background(),
 				client,
 				prompt,
+				llms.WithMaxTokens(1024),
 			)
 			if err != nil {
 				results <- fmt.Errorf("error: %v", err).Error()
@@ -44,7 +45,7 @@ func main() {
 	})
 
 	// test prompt / task
-	tasks <- "explain why Go channels are better for AI agents than Python loops."
+	tasks <- "Be clear, concise, and simple. Explain why Go channels are better for AI agents than Python loops."
 	close(tasks)
 
 	go func() {
