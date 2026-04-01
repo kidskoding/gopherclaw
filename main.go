@@ -73,7 +73,7 @@ func main() {
 
 	go func() {
 		prompts := []string{
-			"Who created GopherClaw and what tools does it support? Search the knowledge base first, then verify by reading the source code.",
+			"Read the main.go file, store its key details in the knowledge base, then search the knowledge base to confirm it was saved correctly.",
 		}
 		
 		for i, p := range prompts {

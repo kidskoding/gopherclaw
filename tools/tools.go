@@ -90,6 +90,27 @@ func Definitions() []llms.Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: &llms.FunctionDefinition{
+				Name:        "store_knowledge",
+				Description: "Store text in the knowledge base for future retrieval. Use this to save important information you've discovered.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"content": map[string]any{
+							"type":        "string",
+							"description": "The text content to store in the knowledge base",
+						},
+						"source": map[string]any{
+							"type":        "string",
+							"description": "A label describing where this info came from (e.g. 'main.go', 'user request')",
+						},
+					},
+					"required": []string{"content", "source"},
+				},
+			},
+		},
 	}
 
 	if mcpManager != nil {
@@ -118,6 +139,8 @@ func Execute(name string, argsJSON string) string {
 		return getTime()
 	case "search_knowledge":
 		return searchKnowledge(args["query"])
+	case "store_knowledge":
+		return storeKnowledge(args["content"], args["source"])
 	default:
 		return fmt.Sprintf("unknown tool: %s", name)
 	}
@@ -162,6 +185,17 @@ func readFile(path string) string {
 
 func getTime() string {
 	return time.Now().Format("2006-01-02 15:04:05 MST")
+}
+
+func storeKnowledge(content, source string) string {
+	if ragModule == nil {
+		return "error: knowledge base not configured"
+	}
+	docs := rag.ChunkAndWrap(content, source)
+	if err := ragModule.Ingest(context.Background(), docs); err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+	return fmt.Sprintf("Stored %d chunks from %q in knowledge base.", len(docs), source)
 }
 
 func searchKnowledge(query string) string {

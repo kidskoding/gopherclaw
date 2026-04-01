@@ -34,6 +34,21 @@ func LoadTextFile(path string) ([]schema.Document, error) {
 	return docs, nil
 }
 
+func ChunkAndWrap(text, source string) []schema.Document {
+	chunks := chunkText(text, chunkSize, chunkOverlap)
+	var docs []schema.Document
+	for i, chunk := range chunks {
+		docs = append(docs, schema.Document{
+			PageContent: chunk,
+			Metadata: map[string]any{
+				"source": source,
+				"chunk":  i,
+			},
+		})
+	}
+	return docs
+}
+
 func chunkText(text string, size, overlap int) []string {
 	var chunks []string
 	for start := 0; start < len(text); start += size - overlap {
